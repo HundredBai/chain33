@@ -1290,6 +1290,16 @@ func (bs *BlockStore) CheckSequenceStatus(recordSequence bool) int {
 	return seqStatusOk
 }
 
+//GetBlockHeaderBySequence 从sequence 得到 block header
+func (bs *BlockStore) GetBlockHeaderBySequence(seq int64) (*types.Header, error) {
+ 	blockSeq, err := bs.GetBlockSequence(seq)
+ 	if err != nil {
+ 		storeLog.Error("GetBlockHeaderBySequence GetBlockSequence", "error", err)
+ 		return nil, err
+ 	}
+ 	return bs.GetBlockHeaderByHash(blockSeq.Hash)
+}
+
 //CreateSequences 根据高度生成sequence记录
 // lastSeq == -1 重新开始同步
 // lastSeq >= 0 type == Delete, 先顶上删除Delete 部分， 情况转为下面情况
@@ -1321,8 +1331,21 @@ func (bs *BlockStore) CreateSequences(batchSize int64) {
 	newBatch := bs.NewBatch(true)
 	lastHeight := bs.Height()
 
-	for i := lastSeq + 1; i <= lastHeight; i++ {
-		seq := i
+	startSeq := lastSeq + 1
+	startHeight := lastSeq + 1
+	if lastSeq > 0 {
+		header, err := bs.GetBlockHeaderBySequence(lastSeq)
+		if err != nil {
+			storeLog.Error("CreateSequences GetBlockHeaderBySequence", "seq", lastSeq, "error", err)
+			panic("CreateSequences GetBlockHeaderBySequence" + err.Error())
+		}
+		storeLog.Info("CreateSequences GetBlockHeaderBySequence", "seq", lastSeq, "header", header.Height)
+		startHeight = header.Height + 1
+	}
+
+	delta := startSeq - startHeight
+	for i := startHeight; i <= lastHeight; i++ {
+		seq := i + delta
 		header, err := bs.GetBlockHeaderByHeight(i)
 		if err != nil {
 			storeLog.Error("CreateSequences GetBlockHeaderByHeight", "height", i, "error", err)
@@ -1344,15 +1367,15 @@ func (bs *BlockStore) CreateSequences(batchSize int64) {
 		sequenceBytes := types.Encode(&types.Int64{Data: seq})
 		newBatch.Set(calcHashToSequenceKey(header.Hash, bs.isParaChain), sequenceBytes)
 
-		if i-lastSeq == batchSize {
-			storeLog.Info("CreateSequences ", "height", i)
+		if seq-lastSeq == batchSize {
+			storeLog.Info("CreateSequences ", "height", i, "seq", seq)
 			newBatch.Set(calcLastSeqKey(bs.isParaChain), types.Encode(&types.Int64{Data: i}))
 			err = newBatch.Write()
 			if err != nil {
 				storeLog.Error("CreateSequences newBatch.Write", "error", err)
 				panic("CreateSequences newBatch.Write" + err.Error())
 			}
-			lastSeq = i
+			lastSeq = seq
 			newBatch.Reset()
 		}
 	}
