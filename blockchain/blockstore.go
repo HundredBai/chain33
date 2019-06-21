@@ -1291,6 +1291,9 @@ func (bs *BlockStore) CheckSequenceStatus(recordSequence bool) int {
 }
 
 //CreateSequences 根据高度生成sequence记录
+// lastSeq == -1 重新开始同步
+// lastSeq >= 0 type == Delete, 先顶上删除Delete 部分， 情况转为下面情况
+// lastSeq >= 0 type == Add 接着同步, seq和height 同步增加
 func (bs *BlockStore) CreateSequences(batchSize int64) {
 	lastSeq, err := bs.LoadBlockLastSequence()
 	if err != nil {
@@ -1300,6 +1303,20 @@ func (bs *BlockStore) CreateSequences(batchSize int64) {
 		}
 	}
 	storeLog.Info("CreateSequences LoadBlockLastSequence", "start", lastSeq)
+
+	if lastSeq > 0 {
+		err = bs.deleteLastDeleteSequence(lastSeq)
+		if err != nil {
+			storeLog.Error("CreateSequences deleteLastDeleteSequence", "seq", lastSeq, "error", err)
+			panic("CreateSequences deleteLastDeleteSequence" + err.Error())
+		}
+		lastSeq, err := bs.LoadBlockLastSequence()
+		if err != nil {
+			storeLog.Error("CreateSequences LoadBlockLastSequence 2", "seq", lastSeq, "error", err)
+			panic("CreateSequences LoadBlockLastSequence 2" + err.Error())
+		}
+		storeLog.Info("CreateSequences LoadBlockLastSequence 2", "start_add", lastSeq)
+	}
 
 	newBatch := bs.NewBatch(true)
 	lastHeight := bs.Height()
@@ -1394,4 +1411,30 @@ func (bs *BlockStore) DeleteSequences(batchSize int64) {
 		panic("DeleteSequences newBatch.Write" + err.Error())
 	}
 	storeLog.Info("DeleteSequences done")
+}
+
+// 只删除在顶上的delete sequence, 是区块链分叉引起的。
+// 分叉回滚也高度限制， 这里不分批处理
+func (bs *BlockStore) deleteLastDeleteSequence(lastSeq int64) error {
+	batch := bs.NewBatch(true)
+	seq := lastSeq
+	for ; seq >= 0; seq-- {
+		blockSeq, err := bs.GetBlockSequence(seq)
+		if err != nil {
+			storeLog.Error("deleteLastDeleteSequence GetBlockSequence", "error", err)
+			return err
+		}
+		if blockSeq.Type == AddBlock {
+			break
+		}
+		// seq->hash
+		batch.Delete(calcSequenceToHashKey(seq, bs.isParaChain))
+		// hash -> seq
+		batch.Delete(calcHashToSequenceKey(blockSeq.Hash, bs.isParaChain))
+		batch.Set(calcLastSeqKey(bs.isParaChain), types.Encode(&types.Int64{Data: seq - 1}))
+	}
+	if seq == lastSeq {
+		return nil
+	}
+	return batch.Write()
 }
