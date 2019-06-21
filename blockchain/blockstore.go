@@ -1362,12 +1362,11 @@ func (bs *BlockStore) DeleteSequences(batchSize int64) {
 
 	newBatch := bs.NewBatch(true)
 
-	for i := lastSeq; i >= 0; i-- {
-		seq := i
-		header, err := bs.GetBlockHeaderByHeight(i)
+	for seq := lastSeq; seq >= 0; seq-- {
+		header, err := bs.GetBlockSequence(seq)
 		if err != nil {
-			storeLog.Error("DeleteSequences GetBlockHeaderByHeight", "height", i, "error", err)
-			panic("DeleteSequences GetBlockHeaderByHeight" + err.Error())
+			storeLog.Error("DeleteSequences GetBlockSequence", "seq", seq, "error", err)
+			panic("DeleteSequences GetBlockSequence" + err.Error())
 		}
 
 		// seq->hash
@@ -1375,15 +1374,15 @@ func (bs *BlockStore) DeleteSequences(batchSize int64) {
 		// hash -> seq
 		newBatch.Delete(calcHashToSequenceKey(header.Hash, bs.isParaChain))
 
-		if lastSeq-i == batchSize {
-			storeLog.Info("DeleteSequences ", "height", i)
-			newBatch.Set(calcLastSeqKey(bs.isParaChain), types.Encode(&types.Int64{Data: i - 1}))
+		if lastSeq-seq == batchSize {
+			storeLog.Info("DeleteSequences ", "seq", seq)
+			newBatch.Set(calcLastSeqKey(bs.isParaChain), types.Encode(&types.Int64{Data: seq - 1}))
 			err = newBatch.Write()
 			if err != nil {
 				storeLog.Error("DeleteSequences newBatch.Write", "error", err)
 				panic("DeleteSequences newBatch.Write" + err.Error())
 			}
-			lastSeq = i - 1
+			lastSeq = seq - 1
 			newBatch.Reset()
 		}
 	}
