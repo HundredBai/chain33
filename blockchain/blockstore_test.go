@@ -157,8 +157,10 @@ func TestSeqCreateAndDelete(t *testing.T) {
 		var header types.Header
 		h0 := calcHeightToBlockHeaderKey(int64(i))
 		header.Hash = []byte(fmt.Sprintf("%d", i))
+		header.Height = int64(i)
 		types.Encode(&header)
 		batch.Set(h0, types.Encode(&header))
+		batch.Set(calcHashToBlockHeaderKey(header.Hash), types.Encode(&header))
 	}
 	blockStore.height = 100
 	batch.Write()
@@ -169,6 +171,13 @@ func TestSeqCreateAndDelete(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, int64(100), seq)
 
+	// call again
+	blockStore.CreateSequences(10)
+	seq, err = blockStore.LoadBlockLastSequence()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(100), seq)
+
+
 	seq, err = blockStore.GetSequenceByHash([]byte("1"))
 	assert.Nil(t, err)
 	assert.Equal(t, int64(1), seq)
@@ -178,6 +187,12 @@ func TestSeqCreateAndDelete(t *testing.T) {
 	assert.Equal(t, int64(0), seq)
 
 	blockStore.saveSequence = false
+	blockStore.DeleteSequences(10)
+	seq, err = blockStore.LoadBlockLastSequence()
+	assert.NotNil(t, err)
+	assert.Equal(t, int64(-1), seq)
+
+	// call again
 	blockStore.DeleteSequences(10)
 	seq, err = blockStore.LoadBlockLastSequence()
 	assert.NotNil(t, err)
