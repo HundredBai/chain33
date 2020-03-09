@@ -219,11 +219,16 @@ func (demo *demoApp) Exec(tx *types.Transaction, index int) (receipt *types.Rece
 	return nil, queue.ErrQueueTimeout
 }
 
-func (demo *demoApp) Upgrade() (err error) {
+func (demo *demoApp) Upgrade() (*types.LocalDBSet, error) {
 	db := demo.GetLocalDB()
 	db.Set([]byte("LODB-demo-a"), []byte("t1"))
 	db.Set([]byte("LODB-demo-b"), []byte("t2"))
-	return nil
+	var kvset types.LocalDBSet
+	kvset.KV = []*types.KeyValue{
+		{Key: []byte("LODB-demo-a"), Value: []byte("t1")},
+		{Key: []byte("LODB-demo-b"), Value: []byte("t2")},
+	}
+	return &kvset, nil
 }
 
 type demofApp struct {
@@ -244,8 +249,8 @@ func (demo *demofApp) Exec(tx *types.Transaction, index int) (receipt *types.Rec
 	return nil, queue.ErrQueueTimeout
 }
 
-func (demo *demofApp) Upgrade() (err error) {
-	return types.ErrInvalidParam
+func (demo *demofApp) Upgrade() (kvset *types.LocalDBSet, err error) {
+	return nil, types.ErrInvalidParam
 }
 
 func TestExecutorErrAPIEnv(t *testing.T) {
@@ -372,6 +377,14 @@ func TestExecutorPluginUpgrade(t *testing.T) {
 		}
 	}()
 
+	// Test plugin
 	err := exec.upgradeExecPlugin("plugin-demo")
 	assert.Nil(t, err)
+
+	kvset, err := exec.upgradePlugin("demo")
+	assert.Nil(t, err)
+	assert.Equal(t, 2, len(kvset.GetKV()))
+	kvset, err = exec.upgradePlugin("demof")
+	assert.NotNil(t, err)
+	assert.Nil(t, kvset)
 }
