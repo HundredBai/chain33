@@ -407,7 +407,7 @@ func (mock *Chain33Mock) Wait() error {
 
 //GetAccount :
 func (mock *Chain33Mock) GetAccount(stateHash []byte, addr string) *types.Account {
-	statedb := executor.NewStateDB(mock.client, stateHash, nil, nil)
+	statedb := executor.NewStateDB(mock.client, stateHash, nil)
 	types.AssertConfig(mock.client)
 	acc := account.NewCoinsAccount(mock.client.GetConfig())
 	acc.SetDB(statedb)
@@ -416,7 +416,7 @@ func (mock *Chain33Mock) GetAccount(stateHash []byte, addr string) *types.Accoun
 
 //GetExecAccount :get execer account info
 func (mock *Chain33Mock) GetExecAccount(stateHash []byte, execer, addr string) *types.Account {
-	statedb := executor.NewStateDB(mock.client, stateHash, nil, nil)
+	statedb := executor.NewStateDB(mock.client, stateHash, nil)
 	types.AssertConfig(mock.client)
 	acc := account.NewCoinsAccount(mock.client.GetConfig())
 	acc.SetDB(statedb)
