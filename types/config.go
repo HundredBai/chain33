@@ -35,7 +35,7 @@ var (
 const (
 	Coin            int64 = 1e8
 	MaxCoin         int64 = 1e17
-	MaxTxSize             = 100000 //100K
+	MaxTxSize             = 10000000 // 10M
 	MaxTxGroupSize  int32 = 20
 	MaxBlockSize          = 20000000 //20M
 	MaxTxsPerBlock        = 100000
