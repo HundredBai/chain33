@@ -300,6 +300,51 @@ func TestDel(t *testing.T) {
 	assert.Equal(t, 0, len(rows))
 }
 
+func TestReplaceDel(t *testing.T) {
+	dir, ldb, kvdb := util.CreateTestDB()
+	defer util.CloseTestDB(dir, ldb)
+	opt := &Option{
+		Prefix:  "prefix-hello",
+		Name:    "name",
+		Primary: "Hash",
+		Index:   []string{"From", "To"},
+	}
+	cfg := types.NewChain33Config(types.GetDefaultCfgstring())
+	table, err := NewTable(NewTransactionRow(), kvdb, opt)
+	assert.Nil(t, err)
+	_, priv := util.Genaddress()
+
+	// block1.Tx1 初始化数据
+	tx1 := util.CreateNoneTx(cfg, priv)
+	err = table.Add(tx1)
+	assert.Nil(t, err)
+	kvs, err := table.Save()
+	assert.Nil(t, err)
+	// save block1
+	util.SaveKVList(ldb, kvs)
+
+	// block2.Tx1 更新, 在删除
+	//不改变hash，改变签名
+	tx2 := types.CloneTx(tx1)
+	tx2.Signature = nil
+	// 这里是否调用Replace 结果都一样
+	err = table.Replace(tx2)
+	assert.Nil(t, err)
+	err = table.Del(tx2.Hash())
+	assert.Nil(t, err)
+	kvs, err = table.Save()
+	assert.Nil(t, err)
+	assert.Equal(t, 3, len(kvs))
+	
+	// 在一个区块中, 前面的交易在删除的数据, 后面还能被读到
+	// block2.tx2 
+	row, err := table.GetData(tx2.Hash())
+	assert.Equal(t, types.ErrNotFound, err) // no error
+	// 预期是查找不到, 这里和原来的一致
+	assert.NotEqual(t, row.Data.(*types.Transaction).Hash(), tx2.Hash())
+}
+
+
 func TestUpdate(t *testing.T) {
 	dir, ldb, kvdb := util.CreateTestDB()
 	defer util.CloseTestDB(dir, ldb)
